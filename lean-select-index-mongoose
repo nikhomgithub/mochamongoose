@@ -1,0 +1,102 @@
+require('dotenv').config();
+
+const mongoose = require('mongoose');
+const Schema = mongoose.Schema;
+const casual = require('casual')
+
+const UserSchema = new Schema({
+    name:String,
+    email:String,
+    age:Number,
+    details:mongoose.Schema.Types.Mixed,
+    birthDate:Date,
+ });
+
+const User=mongoose.model('User',UserSchema)
+ 
+const IndexUserSchema = new Schema({
+    name:String,
+    email:String,
+    age:Number,
+    details:mongoose.Schema.Types.Mixed,
+    birthDate:Date,
+});
+
+IndexUserSchema.index({age:-1})
+
+const IndexUser=mongoose.model('IndexUser',IndexUserSchema)
+
+
+const popData=(items)=>{
+
+    return new Promise((resolve,reject)=>{
+
+        let temp=[]
+
+        for(let i=0;i<items;i++){
+            const newPerson={
+                name:casual.name,
+                email:casual.email,
+                age:casual.integer(0,100),
+                detail:casual.array_of_integers(100),
+                birthDate:new Date(casual.date('YYYY-MM-DD'))
+            }
+            
+            temp=[...temp,newPerson]
+        }
+        resolve(temp)
+
+    })
+
+}
+
+const db=process.env.MONGO_URI
+
+const query = {age:{$gt:22}}
+
+mongoose
+  .connect(
+    db,
+    { useNewUrlParser: true ,
+      useUnifiedTopology: true
+    }
+  )
+  .then(()=> Promise.all( [User.deleteMany({}),IndexUser.deleteMany({})]  ) )
+  .then(()=>popData(10000))
+  .then((docs)=> Promise.all( [User.insertMany(docs), IndexUser.insertMany(docs)] ) )
+  .then(()=>Promise.all( [User.find().count(),IndexUser.find().count()] ) )
+  .then((result) =>{ 
+        console.log(result)
+        console.time('User')
+        User.find(query)
+        console.timeEnd('User')
+    }) 
+  .then(()=>{
+        console.time('IndexUser')
+        IndexUser.find(query)
+        console.timeEnd('IndexUser')
+  })
+  .then(()=>{
+        console.time('User_lean')
+        User.find(query).lean()
+        console.timeEnd('User_lean')
+  })
+  .then(()=>{
+        console.time('IndexUser_lean')
+        IndexUser.find(query).lean()
+        console.timeEnd('IndexUser_lean')
+  })
+  .then(()=>{
+    console.time('User_select')
+    User.find(query).select({_id:1,name:1,email:1})
+    console.timeEnd('User_select')
+  })
+  .then(()=>{
+    console.time('IndexUser_select')
+    IndexUser.find(query).select({_id:1,name:1,email:1})
+    console.timeEnd('IndexUser_select')
+  })
+  .catch(err => console.log(err));
+
+
+
